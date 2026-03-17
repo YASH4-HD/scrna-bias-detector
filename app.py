@@ -309,23 +309,34 @@ if df is not None:
                         </div>""", unsafe_allow_html=True)
 
             else:  # t-SNE
-                perplexity = st.slider("Perplexity:", 5, 50, 30)
-                with st.spinner("Running t-SNE... (may take ~15 seconds)"):
-                    tsne      = TSNE(n_components=2, perplexity=perplexity,
-                                     random_state=42, n_iter=1000)
-                    embedding = tsne.fit_transform(pca_50)
+                perplexity = st.slider("Perplexity:", 5, 50, 30, key="tsne_perp")
+                n_iter_tsne = st.slider("Max iterations:", 250, 2000, 1000, step=250, key="tsne_iter")
 
-                fig, ax = plt.subplots(figsize=(8, 6))
-                categories = df[color_by_dr].unique()
-                colors = plt.cm.tab10(np.linspace(0, 1, len(categories)))
-                for cat, col in zip(categories, colors):
-                    mask = df[color_by_dr] == cat
-                    ax.scatter(embedding[mask, 0], embedding[mask, 1],
-                               label=cat, alpha=0.7, s=20, color=col)
-                ax.set_xlabel("t-SNE-1"); ax.set_ylabel("t-SNE-2")
-                ax.set_title(f"t-SNE — colored by {color_by_dr}")
-                ax.legend(fontsize=9)
-                plt.tight_layout(); st.pyplot(fig); plt.close()
+                if st.button("▶️ Run t-SNE", key="run_tsne"):
+                    with st.spinner("Running t-SNE... (may take ~15 seconds)"):
+                        tsne      = TSNE(n_components=2, perplexity=perplexity,
+                                         random_state=42, max_iter=n_iter_tsne)
+                        embedding = tsne.fit_transform(pca_50)
+                    st.session_state["tsne_embedding"] = embedding
+                    st.session_state["tsne_color"]     = color_by_dr
+
+                embedding = st.session_state.get("tsne_embedding", None)
+                color_by_dr_tsne = st.session_state.get("tsne_color", color_by_dr)
+
+                if embedding is not None:
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    categories = df[color_by_dr_tsne].unique()
+                    colors = plt.cm.tab10(np.linspace(0, 1, len(categories)))
+                    for cat, col in zip(categories, colors):
+                        mask = df[color_by_dr_tsne] == cat
+                        ax.scatter(embedding[mask, 0], embedding[mask, 1],
+                                   label=cat, alpha=0.7, s=20, color=col)
+                    ax.set_xlabel("t-SNE-1"); ax.set_ylabel("t-SNE-2")
+                    ax.set_title(f"t-SNE — colored by {color_by_dr_tsne}")
+                    ax.legend(fontsize=9)
+                    plt.tight_layout(); st.pyplot(fig); plt.close()
+                else:
+                    st.info("👆 Set perplexity and click **Run t-SNE** to compute the embedding.")
 
             # Side-by-side comparison with PCA
             st.markdown("#### 🔄 Pipeline: PCA → UMAP → Batch Assessment")
