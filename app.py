@@ -486,7 +486,11 @@ if df is not None:
                         meta = df[["batch"]].copy()
                         ho   = hm.run_harmony(pcs_before, meta, "batch", theta=theta,
                                               max_iter_harmony=20, random_state=42)
-                        pcs_after = ho.Z_corr.T  # shape: (n_cells, n_pcs)
+                        # Z_corr shape is (n_pcs, n_cells) — convert to numpy and transpose
+                        pcs_after = np.array(ho.Z_corr).T
+                        # Safety: if transpose gave wrong orientation, flip back
+                        if pcs_after.shape[0] != pcs_before.shape[0]:
+                            pcs_after = pcs_after.T
 
                     st.success("✅ Harmony correction complete!")
 
