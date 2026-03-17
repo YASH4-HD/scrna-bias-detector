@@ -153,22 +153,25 @@ def generate_pbmc_data():
     """Kang et al. 2018 style PBMC data — Control vs IFN-β stimulated, 2 batches."""
     np.random.seed(2026)
     n_cells = 600
-    n_genes = 50
-    gene_names = (
-        [f"ISG{i:02d}" for i in range(1, 16)] +   # IFN-stimulated genes (real names style)
-        [f"HLA{i:02d}" for i in range(1, 11)] +    # MHC genes
-        [f"CD{i:02d}"  for i in range(1, 11)] +    # Surface markers
-        [f"RPS{i:02d}" for i in range(1, 9)]  +    # Ribosomal
-        [f"MT{i:02d}"  for i in range(1, 9)]        # Mitochondrial
-    )
+
+    # Build gene list — exact count tracked
+    isg  = [f"ISG{i:02d}" for i in range(1, 16)]   # 15 IFN-stimulated genes
+    hla  = [f"HLA{i:02d}" for i in range(1, 11)]   # 10 MHC genes
+    cd   = [f"CD{i:02d}"  for i in range(1, 11)]   # 10 surface markers
+    rps  = [f"RPS{i:02d}" for i in range(1, 9)]    # 8 ribosomal
+    mt   = [f"MT{i:02d}"  for i in range(1, 8)]    # 7 mitochondrial
+    gene_names = isg + hla + cd + rps + mt          # total = 50
+    n_genes = len(gene_names)                        # use actual count
 
     # Batch 1: Control PBMC
     b1 = np.random.negative_binomial(5, 0.5, (n_cells, n_genes)).astype(float)
 
     # Batch 2: IFN-β stimulated — ISG genes strongly upregulated
     b2 = np.random.negative_binomial(5, 0.5, (n_cells, n_genes)).astype(float)
-    b2[:, :15] += np.random.uniform(6, 12, (n_cells, 15))   # ISG upregulation
-    b2[:, 15:25] += np.random.uniform(2, 5, (n_cells, 10))  # HLA upregulation
+    n_isg = len(isg)
+    n_hla = len(hla)
+    b2[:, :n_isg] += np.random.uniform(6, 12, (n_cells, n_isg))
+    b2[:, n_isg:n_isg+n_hla] += np.random.uniform(2, 5, (n_cells, n_hla))
     b2 *= 1.4  # sequencing depth difference (technical batch effect)
 
     # Log-normalize
@@ -187,7 +190,7 @@ def generate_pbmc_data():
     df["n_genes_detected"] = (df[gene_names] > 0).sum(axis=1)
     df["mito_fraction"]    = np.concatenate([
         np.random.beta(2, 20, n_cells),
-        np.random.beta(3, 15, n_cells)   # slightly higher mito in stimulated
+        np.random.beta(3, 15, n_cells)
     ])
     return df, gene_names
 
