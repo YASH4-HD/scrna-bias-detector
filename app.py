@@ -154,27 +154,22 @@ def generate_pbmc_data():
     np.random.seed(2026)
     n_cells = 600
 
-    # Build gene list — exact count tracked
-    isg  = [f"ISG{i:02d}" for i in range(1, 16)]   # 15 IFN-stimulated genes
-    hla  = [f"HLA{i:02d}" for i in range(1, 11)]   # 10 MHC genes
-    cd   = [f"CD{i:02d}"  for i in range(1, 11)]   # 10 surface markers
-    rps  = [f"RPS{i:02d}" for i in range(1, 9)]    # 8 ribosomal
-    mt   = [f"MT{i:02d}"  for i in range(1, 8)]    # 7 mitochondrial
-    gene_names = isg + hla + cd + rps + mt          # total = 50
-    n_genes = len(gene_names)                        # use actual count
+    isg  = [f"ISG{i:02d}" for i in range(1, 16)]
+    hla  = [f"HLA{i:02d}" for i in range(1, 11)]
+    cd   = [f"CD{i:02d}"  for i in range(1, 11)]
+    rps  = [f"RPS{i:02d}" for i in range(1, 9)]
+    mt   = [f"MT{i:02d}"  for i in range(1, 8)]
+    gene_names = isg + hla + cd + rps + mt
+    n_genes = len(gene_names)
 
-    # Batch 1: Control PBMC
     b1 = np.random.negative_binomial(5, 0.5, (n_cells, n_genes)).astype(float)
-
-    # Batch 2: IFN-β stimulated — ISG genes strongly upregulated
     b2 = np.random.negative_binomial(5, 0.5, (n_cells, n_genes)).astype(float)
     n_isg = len(isg)
     n_hla = len(hla)
     b2[:, :n_isg] += np.random.uniform(6, 12, (n_cells, n_isg))
     b2[:, n_isg:n_isg+n_hla] += np.random.uniform(2, 5, (n_cells, n_hla))
-    b2 *= 1.4  # sequencing depth difference (technical batch effect)
+    b2 *= 1.4
 
-    # Log-normalize
     def lognorm(x):
         s = x.sum(axis=1, keepdims=True).clip(min=1)
         return np.log1p(x / s * 10000)
@@ -221,7 +216,7 @@ else:
             "IFN-β stimulation creates strong, biologically meaningful batch effects "
             "ideal for benchmarking batch correction tools.")
 
-# ─── Main Tabs ────────────────────────────────────────────────────────────────
+# ─── Main Tabs ───────────────────────────────────────────────────────────────
 if df is not None:
     tabs = st.tabs([
         "📊 Overview",
@@ -237,8 +232,8 @@ if df is not None:
     ])
 
     # ── Shared preprocessing ─────────────────────────────────────────────────
-    expr       = df[gene_cols].fillna(0)
-    scaler     = StandardScaler()
+    expr        = df[gene_cols].fillna(0)
+    scaler      = StandardScaler()
     expr_scaled = scaler.fit_transform(expr)
 
     # ════════════════════════════════════════════════════════════════════
@@ -310,7 +305,7 @@ if df is not None:
                 a strong batch effect is present.</div>""", unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════════════
-    # TAB 2 — UMAP / t-SNE  (NEW)
+    # TAB 2 — UMAP / t-SNE
     # ════════════════════════════════════════════════════════════════════
     with tabs[2]:
         if run_dimred:
@@ -327,7 +322,6 @@ if df is not None:
                                        [c for c in ["batch", "cell_type"] if c in df.columns],
                                        key="dr_color")
 
-            # Use PCA-reduced space as input (standard practice)
             pca_50 = PCA(n_components=min(10, len(gene_cols))).fit_transform(expr_scaled)
 
             if method == "UMAP":
@@ -362,7 +356,7 @@ if df is not None:
                         </div>""", unsafe_allow_html=True)
 
             else:  # t-SNE
-                perplexity = st.slider("Perplexity:", 5, 50, 30, key="tsne_perp")
+                perplexity  = st.slider("Perplexity:", 5, 50, 30, key="tsne_perp")
                 n_iter_tsne = st.slider("Max iterations:", 250, 2000, 1000, step=250, key="tsne_iter")
 
                 if st.button("▶️ Run t-SNE", key="run_tsne"):
@@ -373,7 +367,7 @@ if df is not None:
                     st.session_state["tsne_embedding"] = embedding
                     st.session_state["tsne_color"]     = color_by_dr
 
-                embedding = st.session_state.get("tsne_embedding", None)
+                embedding        = st.session_state.get("tsne_embedding", None)
                 color_by_dr_tsne = st.session_state.get("tsne_color", color_by_dr)
 
                 if embedding is not None:
@@ -391,7 +385,6 @@ if df is not None:
                 else:
                     st.info("👆 Set perplexity and click **Run t-SNE** to compute the embedding.")
 
-            # Side-by-side comparison with PCA
             st.markdown("#### 🔄 Pipeline: PCA → UMAP → Batch Assessment")
             st.markdown("""<div class="info-box">
             QC → <b>PCA</b> (linear structure) → <b>UMAP/t-SNE</b> (nonlinear clusters)
@@ -439,29 +432,55 @@ if df is not None:
                             unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════════════
-    # TAB 4 — Outliers
+    # TAB 4 — Outliers  ✅ UPDATED: Histogram + PCA biplot side by side
     # ════════════════════════════════════════════════════════════════════
     with tabs[4]:
         if run_outlier:
             st.markdown('<div class="section-header">🚨 Outlier Cell Detection</div>', unsafe_allow_html=True)
-            contamination = st.slider("Contamination rate:", 0.01, 0.2, 0.05)
-            iso           = IsolationForest(contamination=contamination, random_state=42)
+            contamination  = st.slider("Contamination rate:", 0.01, 0.2, 0.05)
+            iso            = IsolationForest(contamination=contamination, random_state=42)
             outlier_labels = iso.fit_predict(expr)
-            df["outlier"]  = outlier_labels
+            # Also get anomaly scores for histogram
+            anomaly_scores = iso.decision_function(expr)   # higher = more normal
+            # Convert to "anomaly score" where lower = more anomalous (intuitive direction)
+            anomaly_scores_plot = -anomaly_scores          # flip sign: higher = more anomalous
+
+            df["outlier"] = outlier_labels
 
             n_outliers = (outlier_labels == -1).sum()
             st.metric("🚨 Outlier Cells Detected", n_outliers,
                       delta=f"{n_outliers/len(df)*100:.1f}% of dataset")
 
+            # ── NEW: Side-by-side — Histogram + PCA biplot ──────────────
             pcs2 = PCA(n_components=2).fit_transform(expr_scaled)
-            fig, ax = plt.subplots(figsize=(8, 5))
-            ax.scatter(pcs2[outlier_labels == 1, 0],  pcs2[outlier_labels == 1, 1],
-                       c="#1f77b4", alpha=0.5, s=15, label="Normal")
-            ax.scatter(pcs2[outlier_labels == -1, 0], pcs2[outlier_labels == -1, 1],
-                       c="#d62728", alpha=0.9, s=40, label="Outlier", marker="x")
-            ax.set_xlabel("PC1"); ax.set_ylabel("PC2")
-            ax.set_title("Outlier Detection via Isolation Forest")
-            ax.legend(); plt.tight_layout(); st.pyplot(fig); plt.close()
+
+            fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+            # LEFT PANEL — Anomaly Score Histogram
+            threshold = np.percentile(anomaly_scores_plot, (1 - contamination) * 100)
+            axes[0].hist(anomaly_scores_plot[outlier_labels == 1],
+                         bins=30, color="#1f77b4", alpha=0.7, label="Normal", edgecolor="white")
+            axes[0].hist(anomaly_scores_plot[outlier_labels == -1],
+                         bins=15, color="#d62728", alpha=0.8, label="Outlier", edgecolor="white")
+            axes[0].axvline(threshold, color="black", linestyle="--", linewidth=1.5,
+                            label=f"Threshold ({contamination*100:.0f}%)")
+            axes[0].set_xlabel("Anomaly Score (higher = more anomalous)")
+            axes[0].set_ylabel("Number of Cells")
+            axes[0].set_title("Anomaly Score Distribution")
+            axes[0].legend(fontsize=9)
+
+            # RIGHT PANEL — PCA biplot with outliers
+            axes[1].scatter(pcs2[outlier_labels == 1,  0], pcs2[outlier_labels == 1,  1],
+                            c="#1f77b4", alpha=0.5, s=15, label="Normal")
+            axes[1].scatter(pcs2[outlier_labels == -1, 0], pcs2[outlier_labels == -1, 1],
+                            c="#d62728", alpha=0.9, s=40, label="Outlier", marker="x")
+            axes[1].set_xlabel("PC1"); axes[1].set_ylabel("PC2")
+            axes[1].set_title("Outlier Detection via Isolation Forest")
+            axes[1].legend()
+
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
 
             if n_outliers > 0:
                 st.markdown("#### 🔍 Outlier Cell Details")
@@ -486,19 +505,19 @@ if df is not None:
                     ax.set_title(gene); ax.set_xlabel("Expression"); ax.set_ylabel("# Cells")
                 plt.tight_layout(); st.pyplot(fig); plt.close()
 
-                st.markdown("#### 💧 Zero-Inflation Analysis")
-                zero_df = pd.DataFrame(
-                    [(g, (df[g] == 0).mean() * 100) for g in gene_cols],
-                    columns=["Gene", "Zero Fraction (%)"]
-                ).sort_values("Zero Fraction (%)", ascending=False)
+            st.markdown("#### 💧 Zero-Inflation Analysis")
+            zero_df = pd.DataFrame(
+                [(g, (df[g] == 0).mean() * 100) for g in gene_cols],
+                columns=["Gene", "Zero Fraction (%)"]
+            ).sort_values("Zero Fraction (%)", ascending=False)
 
-                fig2, ax2 = plt.subplots(figsize=(12, 4))
-                ax2.bar(zero_df["Gene"], zero_df["Zero Fraction (%)"], color="#e377c2")
-                ax2.axhline(80, color="red", linestyle="--", label="80% threshold")
-                ax2.set_title("Zero Fraction per Gene")
-                ax2.set_ylabel("% Cells with Zero Expression")
-                ax2.tick_params(axis="x", rotation=45); ax2.legend()
-                plt.tight_layout(); st.pyplot(fig2); plt.close()
+            fig2, ax2 = plt.subplots(figsize=(12, 4))
+            ax2.bar(zero_df["Gene"], zero_df["Zero Fraction (%)"], color="#e377c2")
+            ax2.axhline(80, color="red", linestyle="--", label="80% threshold")
+            ax2.set_title("Zero Fraction per Gene")
+            ax2.set_ylabel("% Cells with Zero Expression")
+            ax2.tick_params(axis="x", rotation=45); ax2.legend()
+            plt.tight_layout(); st.pyplot(fig2); plt.close()
 
     # ════════════════════════════════════════════════════════════════════
     # TAB 6 — Correlation
@@ -507,7 +526,7 @@ if df is not None:
         if run_corr:
             st.markdown('<div class="section-header">🌡️ Gene Correlation Heatmap</div>',
                         unsafe_allow_html=True)
-            max_genes  = st.slider("Top genes to include:", 5, min(30, len(gene_cols)), 15)
+            max_genes   = st.slider("Top genes to include:", 5, min(30, len(gene_cols)), 15)
             corr_matrix = df[gene_cols[:max_genes]].corr()
             fig, ax = plt.subplots(figsize=(10, 8))
             sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm",
@@ -516,7 +535,7 @@ if df is not None:
             plt.tight_layout(); st.pyplot(fig); plt.close()
 
     # ════════════════════════════════════════════════════════════════════
-    # TAB 7 — HARMONY BATCH CORRECTION  (NEW)
+    # TAB 7 — Harmony Batch Correction
     # ════════════════════════════════════════════════════════════════════
     with tabs[7]:
         if run_harmony:
@@ -542,23 +561,18 @@ if df is not None:
 
                 if st.button("▶️ Run Harmony Correction"):
                     with st.spinner("Running Harmony batch integration..."):
-                        # PCA before correction
                         pca_before = PCA(n_components=n_pcs)
                         pcs_before = pca_before.fit_transform(expr_scaled)
 
-                        # Harmony integration
                         meta = df[["batch"]].copy()
                         ho   = hm.run_harmony(pcs_before, meta, "batch", theta=theta,
                                               max_iter_harmony=20, random_state=42)
-                        # Z_corr shape is (n_pcs, n_cells) — convert to numpy and transpose
                         pcs_after = np.array(ho.Z_corr).T
-                        # Safety: if transpose gave wrong orientation, flip back
                         if pcs_after.shape[0] != pcs_before.shape[0]:
                             pcs_after = pcs_after.T
 
                     st.success("✅ Harmony correction complete!")
 
-                    # ── Before vs After PCA plots ──────────────────────────
                     st.markdown("#### 📊 Before vs After Harmony: PCA Embedding")
                     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
                     categories = df["batch"].unique()
@@ -577,11 +591,9 @@ if df is not None:
                     axes[1].set_xlabel("HC1"); axes[1].set_ylabel("HC2"); axes[1].legend(fontsize=8)
                     plt.tight_layout(); st.pyplot(fig); plt.close()
 
-                    # ── Quantitative batch mixing score ───────────────────
                     st.markdown("#### 📐 Batch Separation Score (lower = better mixing)")
 
                     def batch_separation_score(embedding, batch_labels):
-                        """Mean distance between batch centroids (lower = more mixed)."""
                         centroids = {}
                         for b in np.unique(batch_labels):
                             centroids[b] = embedding[batch_labels == b].mean(axis=0)
@@ -592,7 +604,7 @@ if df is not None:
                                 dists.append(np.linalg.norm(centroid_vals[i] - centroid_vals[j]))
                         return np.mean(dists)
 
-                    batch_arr  = df["batch"].values
+                    batch_arr    = df["batch"].values
                     score_before = batch_separation_score(pcs_before, batch_arr)
                     score_after  = batch_separation_score(pcs_after,  batch_arr)
                     improvement  = (score_before - score_after) / score_before * 100
@@ -612,7 +624,6 @@ if df is not None:
                                     'Consider increasing theta or checking data quality.</div>',
                                     unsafe_allow_html=True)
 
-                    # ── Download corrected embedding ──────────────────────
                     st.markdown("#### ⬇️ Download Corrected Embedding")
                     harmony_df  = pd.DataFrame(pcs_after,
                                                columns=[f"HC{i+1}" for i in range(pcs_after.shape[1])])
@@ -628,7 +639,7 @@ if df is not None:
                                        mime="text/csv")
 
     # ════════════════════════════════════════════════════════════════════
-    # TAB 8 — GNN CELL GRAPH MODULE  (NEW)
+    # TAB 8 — GNN Cell Graph Module
     # ════════════════════════════════════════════════════════════════════
     with tabs[8]:
         if run_gnn:
@@ -645,7 +656,6 @@ if df is not None:
             </div>""", unsafe_allow_html=True)
 
             if not GNN_AVAILABLE:
-                # Graceful fallback with sklearn kNN graph + manual GCN
                 st.info("ℹ️ Running lightweight sklearn GNN approximation (mathematically equivalent 1-layer GCN).")
                 st.markdown("#### 🕸️ kNN Cell Similarity Graph (sklearn fallback)")
 
@@ -657,11 +667,9 @@ if df is not None:
                                                include_self=False)
                     adj_arr = adj.toarray()
 
-                    # Simple graph smoothing: X_smooth = D^{-1} A X  (1-layer GCN approx)
                     degree   = adj_arr.sum(axis=1, keepdims=True).clip(min=1)
                     X_smooth = (adj_arr @ pca_gnn) / degree
 
-                # Anomaly detection on smoothed embeddings
                 iso_gnn        = IsolationForest(contamination=0.05, random_state=42)
                 gnn_outliers   = iso_gnn.fit_predict(X_smooth)
                 n_gnn_outliers = (gnn_outliers == -1).sum()
@@ -669,10 +677,8 @@ if df is not None:
                 st.metric("🕸️ GNN-detected Outlier Cells", n_gnn_outliers,
                           delta=f"{n_gnn_outliers/len(df)*100:.1f}% of dataset")
 
-                # Visualise
                 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-                # Original PCA
                 normal_mask  = gnn_outliers == 1
                 outlier_mask = gnn_outliers == -1
                 axes[0].scatter(pca_gnn[normal_mask, 0],  pca_gnn[normal_mask, 1],
@@ -682,7 +688,6 @@ if df is not None:
                 axes[0].set_title("PCA — GNN Outliers Highlighted")
                 axes[0].set_xlabel("PC1"); axes[0].set_ylabel("PC2"); axes[0].legend()
 
-                # GCN-smoothed embedding
                 axes[1].scatter(X_smooth[normal_mask, 0],  X_smooth[normal_mask, 1],
                                 c="#2ca02c", alpha=0.5, s=15, label="Normal")
                 axes[1].scatter(X_smooth[outlier_mask, 0], X_smooth[outlier_mask, 1],
@@ -692,12 +697,11 @@ if df is not None:
 
                 plt.tight_layout(); st.pyplot(fig); plt.close()
 
-                # Graph stats
                 st.markdown("#### 📐 Cell Graph Statistics")
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Total Edges",         int(adj_arr.sum() / 2))
-                c2.metric("Avg Degree",           f"{adj_arr.sum(axis=1).mean():.1f}")
-                c3.metric("Graph Density",        f"{adj_arr.sum() / (len(df)*(len(df)-1)):.4f}")
+                c1.metric("Total Edges",  int(adj_arr.sum() / 2))
+                c2.metric("Avg Degree",   f"{adj_arr.sum(axis=1).mean():.1f}")
+                c3.metric("Graph Density", f"{adj_arr.sum() / (len(df)*(len(df)-1)):.4f}")
 
                 st.markdown("""<div class="info-box">
                 🔬 <b>Interpretation:</b> The GCN smoothing aggregates each cell's expression
@@ -707,7 +711,6 @@ if df is not None:
                 </div>""", unsafe_allow_html=True)
 
             else:
-                # Full PyTorch Geometric GCN
                 st.success("✅ PyTorch Geometric detected — running full GCN.")
                 k_neighbors = st.slider("k (neighbours):", 3, 15, 5, key="knn_k_full")
                 n_epochs    = st.slider("Training epochs:", 10, 100, 30)
@@ -717,7 +720,7 @@ if df is not None:
                         pca_gnn = PCA(n_components=min(10, len(gene_cols))).fit_transform(expr_scaled)
                         adj     = kneighbors_graph(pca_gnn, k_neighbors, mode="connectivity",
                                                    include_self=False)
-                        coo     = adj.tocoo()
+                        coo        = adj.tocoo()
                         edge_index = torch.tensor(
                             np.vstack([coo.row, coo.col]), dtype=torch.long)
                         x = torch.tensor(pca_gnn, dtype=torch.float)
@@ -749,14 +752,12 @@ if df is not None:
 
                     st.success(f"✅ GCN trained. Final loss: {losses[-1]:.4f}")
 
-                    # Loss curve
                     fig_loss, ax_loss = plt.subplots(figsize=(8, 3))
                     ax_loss.plot(losses, color="#1f77b4")
                     ax_loss.set_xlabel("Epoch"); ax_loss.set_ylabel("MSE Loss")
                     ax_loss.set_title("GCN Training Loss")
                     plt.tight_layout(); st.pyplot(fig_loss); plt.close()
 
-                    # GCN embedding visualization
                     iso_gnn      = IsolationForest(contamination=0.05, random_state=42)
                     gnn_outliers = iso_gnn.fit_predict(embedding_gnn)
 
