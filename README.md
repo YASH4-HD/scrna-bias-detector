@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0003--3443--4413-brightgreen)](https://orcid.org/0009-0003-3443-4413)
-
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19095481.svg)](https://doi.org/10.5281/zenodo.19095481)
 ---
 
 ## Overview
