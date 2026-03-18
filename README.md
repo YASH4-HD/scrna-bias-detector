@@ -245,7 +245,7 @@ scRNA-seq Bias Detector includes three built-in datasets for demonstration:
 ```text
 scrna-bias-detector/
 │
-├── app.py                  # Main Streamlit application (v2.0)
+├── app.py                  # Main Streamlit application (v1.0.0)
 ├── requirements.txt        # Python dependencies
 ├── README.md               # This file
 ├── LICENSE                 # MIT License
