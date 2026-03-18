@@ -1,1 +1,29 @@
+cff-version: 1.2.0
+message: "If you use the scRNA-seq Bias Detector in your research, please cite the software and associated preprint."
 
+authors:
+  - family-names: "Nama"
+    given-names: "Yashwant"
+    orcid: "https://orcid.org/0009-0003-3443-4413"
+
+title: "scRNA-seq Bias Detector: An Integrated Framework for Batch Effect Detection and Quality Control in Single-Cell Transcriptomics"
+
+version: "1.0.0"
+date-released: 2026-03-18
+
+doi: "10.5281/zenodo.19095481"
+
+repository-code: "https://github.com/YASH4-HD/scrna-bias-detector"
+url: "https://scrna-bias-detector.streamlit.app/"
+
+license: "MIT"
+
+keywords:
+  - single-cell RNA-seq
+  - scRNA-seq
+  - batch effects
+  - quality control
+  - anomaly detection
+  - bioinformatics
+  - computational genomics
+  - explainable AI
