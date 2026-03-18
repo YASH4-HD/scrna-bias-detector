@@ -124,7 +124,7 @@ with st.sidebar:
     run_gnn      = st.checkbox("GNN Cell Graph Module",    value=True)
 
     st.markdown("---")
-    st.markdown("**scRNA-seq Bias Detector v2.0**")
+    st.markdown("**scRNA-seq Bias Detector v1.0.0**")
     st.markdown("*Computational Genomics | Jaipur, India*")
 
 # ─── Demo Data ───────────────────────────────────────────────────────────────
@@ -817,7 +817,7 @@ if df is not None:
 # ─── Footer ──────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown(
-    "<center>🧬 <b>scRNA-seq Bias Detector v2.0</b> | "
+    "<center>🧬 <b>scRNA-seq Bias Detector v1.0.0</b> | "
     "UMAP · t-SNE · Harmony · GNN | "
     "Computational Genomics Research</center>",
     unsafe_allow_html=True
