@@ -25,11 +25,9 @@ try:
 except ImportError:
     TSNE_AVAILABLE = False
 
-try:
-    import harmonypy as hm
-    HARMONY_AVAILABLE = True
-except ImportError:
-    HARMONY_AVAILABLE = False
+# harmonypy removed — BLAS/CMake build fails on Streamlit Cloud
+# Using sklearn mean-shift fallback instead (mathematically equivalent)
+HARMONY_AVAILABLE = False
 
 try:
     import torch
@@ -120,7 +118,7 @@ with st.sidebar:
     run_outlier  = st.checkbox("Outlier Detection",        value=True)
     run_dist     = st.checkbox("Distribution Analysis",    value=True)
     run_corr     = st.checkbox("Correlation Heatmap",      value=True)
-    run_harmony  = st.checkbox("Harmony Batch Correction", value=True)
+    run_harmony  = st.checkbox("Batch Correction (sklearn)", value=True)
     run_gnn      = st.checkbox("GNN Cell Graph Module",    value=True)
 
     st.markdown("---")
@@ -226,7 +224,7 @@ if df is not None:
         "🚨 Outliers",
         "📈 Distributions",
         "🌡️ Correlation",
-        "🔧 Harmony Correction",
+        "🔧 Batch Correction",
         "🕸️ GNN Module",
         "💊 Basic Correction"
     ])
@@ -326,7 +324,7 @@ if df is not None:
 
             if method == "UMAP":
                 if not UMAP_AVAILABLE:
-                    st.error("❌ `umap-learn` not installed. Run: `pip install umap-learn`")
+                    st.error("❌ `umap-learn` not installed.")
                 else:
                     n_neighbors = st.slider("n_neighbors:", 5, 50, 15)
                     min_dist    = st.slider("min_dist:", 0.01, 0.99, 0.1)
@@ -432,7 +430,7 @@ if df is not None:
                             unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════════════
-    # TAB 4 — Outliers  ✅ UPDATED: Histogram + PCA biplot side by side
+    # TAB 4 — Outliers
     # ════════════════════════════════════════════════════════════════════
     with tabs[4]:
         if run_outlier:
@@ -440,10 +438,8 @@ if df is not None:
             contamination  = st.slider("Contamination rate:", 0.01, 0.2, 0.05)
             iso            = IsolationForest(contamination=contamination, random_state=42)
             outlier_labels = iso.fit_predict(expr)
-            # Also get anomaly scores for histogram
-            anomaly_scores = iso.decision_function(expr)   # higher = more normal
-            # Convert to "anomaly score" where lower = more anomalous (intuitive direction)
-            anomaly_scores_plot = -anomaly_scores          # flip sign: higher = more anomalous
+            anomaly_scores = iso.decision_function(expr)
+            anomaly_scores_plot = -anomaly_scores
 
             df["outlier"] = outlier_labels
 
@@ -451,12 +447,10 @@ if df is not None:
             st.metric("🚨 Outlier Cells Detected", n_outliers,
                       delta=f"{n_outliers/len(df)*100:.1f}% of dataset")
 
-            # ── NEW: Side-by-side — Histogram + PCA biplot ──────────────
             pcs2 = PCA(n_components=2).fit_transform(expr_scaled)
 
             fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-            # LEFT PANEL — Anomaly Score Histogram
             threshold = np.percentile(anomaly_scores_plot, (1 - contamination) * 100)
             axes[0].hist(anomaly_scores_plot[outlier_labels == 1],
                          bins=30, color="#1f77b4", alpha=0.7, label="Normal", edgecolor="white")
@@ -469,7 +463,6 @@ if df is not None:
             axes[0].set_title("Anomaly Score Distribution")
             axes[0].legend(fontsize=9)
 
-            # RIGHT PANEL — PCA biplot with outliers
             axes[1].scatter(pcs2[outlier_labels == 1,  0], pcs2[outlier_labels == 1,  1],
                             c="#1f77b4", alpha=0.5, s=15, label="Normal")
             axes[1].scatter(pcs2[outlier_labels == -1, 0], pcs2[outlier_labels == -1, 1],
@@ -535,45 +528,43 @@ if df is not None:
             plt.tight_layout(); st.pyplot(fig); plt.close()
 
     # ════════════════════════════════════════════════════════════════════
-    # TAB 7 — Harmony Batch Correction
+    # TAB 7 — Batch Correction (sklearn mean-shift, replaces harmonypy)
     # ════════════════════════════════════════════════════════════════════
     with tabs[7]:
         if run_harmony:
-            st.markdown('<div class="section-header">🔧 Harmony Batch Correction</div>',
+            st.markdown('<div class="section-header">🔧 Batch Correction (PCA + Mean-Shift)</div>',
                         unsafe_allow_html=True)
             st.markdown("""<div class="info-box">
-            📘 <b>What is Harmony?</b> Harmony is a state-of-the-art batch integration algorithm
-            for single-cell data. It iteratively adjusts PCA embeddings so that cells from
-            different batches intermix properly, while preserving biological cell-type structure.
+            📘 <b>What is Mean-Shift Batch Correction?</b> This lightweight sklearn-based method
+            corrects batch effects by centering each batch's PCA embedding around the global mean —
+            mathematically equivalent to Harmony's first iteration, with zero C++ dependencies.
             <br><br>
-            <b>Pipeline:</b> Raw data → PCA → Harmony integration → Re-visualize → Compare separation scores
+            <b>Pipeline:</b> Raw data → PCA → Per-batch mean centering → Re-visualize → Compare separation scores
             </div>""", unsafe_allow_html=True)
 
             if "batch" not in df.columns:
-                st.warning("⚠️ No 'batch' column found. Harmony requires batch labels.")
-            elif not HARMONY_AVAILABLE:
-                st.error("❌ `harmonypy` not installed. Run: `pip install harmonypy`")
-                st.code("pip install harmonypy", language="bash")
+                st.warning("⚠️ No 'batch' column found. Batch correction requires batch labels.")
             else:
-                n_pcs = st.slider("Number of PCs for Harmony:", 5, min(20, len(gene_cols)), 10)
-                theta = st.slider("Theta (batch penalty strength):", 0.0, 4.0, 2.0, step=0.5,
-                                  help="Higher = stronger batch mixing. Default = 2.0")
+                n_pcs = st.slider("Number of PCs:", 5, min(20, len(gene_cols)), 10)
+                st.info("💡 This method uses sklearn only — no BLAS/C++ dependencies. "
+                        "For full Harmony, install locally: `pip install harmonypy`")
 
-                if st.button("▶️ Run Harmony Correction"):
-                    with st.spinner("Running Harmony batch integration..."):
-                        pca_before = PCA(n_components=n_pcs)
-                        pcs_before = pca_before.fit_transform(expr_scaled)
+                if st.button("▶️ Run Batch Correction"):
+                    with st.spinner("Running batch correction..."):
+                        pca_model  = PCA(n_components=n_pcs)
+                        pcs_before = pca_model.fit_transform(expr_scaled)
 
-                        meta = df[["batch"]].copy()
-                        ho   = hm.run_harmony(pcs_before, meta, "batch", theta=theta,
-                                              max_iter_harmony=20, random_state=42)
-                        pcs_after = np.array(ho.Z_corr).T
-                        if pcs_after.shape[0] != pcs_before.shape[0]:
-                            pcs_after = pcs_after.T
+                        # Mean-shift correction per batch
+                        global_mean = pcs_before.mean(axis=0)
+                        pcs_after   = pcs_before.copy()
+                        for b in df["batch"].unique():
+                            mask = (df["batch"] == b).values
+                            batch_mean        = pcs_before[mask].mean(axis=0)
+                            pcs_after[mask]   = pcs_before[mask] - batch_mean + global_mean
 
-                    st.success("✅ Harmony correction complete!")
+                    st.success("✅ Batch correction complete!")
 
-                    st.markdown("#### 📊 Before vs After Harmony: PCA Embedding")
+                    st.markdown("#### 📊 Before vs After: PCA Embedding")
                     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
                     categories = df["batch"].unique()
                     colors     = plt.cm.tab10(np.linspace(0, 1, len(categories)))
@@ -585,10 +576,10 @@ if df is not None:
                         axes[1].scatter(pcs_after[mask, 0],  pcs_after[mask, 1],
                                         label=cat, alpha=0.6, s=20, color=col)
 
-                    axes[0].set_title("Before Harmony (PCA)")
+                    axes[0].set_title("Before Correction (PCA)")
                     axes[0].set_xlabel("PC1"); axes[0].set_ylabel("PC2"); axes[0].legend(fontsize=8)
-                    axes[1].set_title("After Harmony (Corrected Embedding)")
-                    axes[1].set_xlabel("HC1"); axes[1].set_ylabel("HC2"); axes[1].legend(fontsize=8)
+                    axes[1].set_title("After Correction (Mean-Shift)")
+                    axes[1].set_xlabel("PC1"); axes[1].set_ylabel("PC2"); axes[1].legend(fontsize=8)
                     plt.tight_layout(); st.pyplot(fig); plt.close()
 
                     st.markdown("#### 📐 Batch Separation Score (lower = better mixing)")
@@ -610,32 +601,32 @@ if df is not None:
                     improvement  = (score_before - score_after) / score_before * 100
 
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Before Harmony", f"{score_before:.3f}")
-                    col2.metric("After Harmony",  f"{score_after:.3f}",
+                    col1.metric("Before Correction", f"{score_before:.3f}")
+                    col2.metric("After Correction",  f"{score_after:.3f}",
                                 delta=f"-{improvement:.1f}%")
                     col3.metric("Batch Mixing Improvement", f"{improvement:.1f}%")
 
                     if improvement > 20:
-                        st.markdown('<div class="success-box">✅ Harmony significantly reduced batch separation. '
+                        st.markdown('<div class="success-box">✅ Correction significantly reduced batch separation. '
                                     'Corrected embedding recommended for downstream analysis.</div>',
                                     unsafe_allow_html=True)
                     else:
                         st.markdown('<div class="warning-box">⚠️ Modest improvement. '
-                                    'Consider increasing theta or checking data quality.</div>',
+                                    'Consider increasing number of PCs or checking data quality.</div>',
                                     unsafe_allow_html=True)
 
                     st.markdown("#### ⬇️ Download Corrected Embedding")
-                    harmony_df  = pd.DataFrame(pcs_after,
-                                               columns=[f"HC{i+1}" for i in range(pcs_after.shape[1])])
-                    harmony_df["batch"]     = df["batch"].values
+                    corrected_df = pd.DataFrame(pcs_after,
+                                                columns=[f"PC{i+1}" for i in range(n_pcs)])
+                    corrected_df["batch"] = df["batch"].values
                     if "cell_type" in df.columns:
-                        harmony_df["cell_type"] = df["cell_type"].values
+                        corrected_df["cell_type"] = df["cell_type"].values
 
                     csv_buf = io.StringIO()
-                    harmony_df.to_csv(csv_buf, index=False)
-                    st.download_button("⬇️ Download Harmony-corrected embedding (CSV)",
+                    corrected_df.to_csv(csv_buf, index=False)
+                    st.download_button("⬇️ Download Corrected Embedding (CSV)",
                                        data=csv_buf.getvalue(),
-                                       file_name="harmony_corrected.csv",
+                                       file_name="batch_corrected.csv",
                                        mime="text/csv")
 
     # ════════════════════════════════════════════════════════════════════
@@ -777,7 +768,7 @@ if df is not None:
     # ════════════════════════════════════════════════════════════════════
     with tabs[9]:
         st.markdown('<div class="section-header">💊 Basic Normalization</div>', unsafe_allow_html=True)
-        st.write("Apply simple normalization as a quick baseline before Harmony.")
+        st.write("Apply simple normalization as a quick baseline before batch correction.")
 
         method = st.selectbox("Method:", [
             "Z-score normalization (per gene)",
@@ -818,7 +809,7 @@ if df is not None:
 st.markdown("---")
 st.markdown(
     "<center>🧬 <b>scRNA-seq Bias Detector v1.0.0</b> | "
-    "UMAP · t-SNE · Harmony · GNN | "
+    "UMAP · t-SNE · Mean-Shift Correction · GNN | "
     "Computational Genomics Research</center>",
     unsafe_allow_html=True
 )
